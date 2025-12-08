@@ -1,0 +1,21 @@
+# Ignore Python virtual environment
+.venv/
+
+# Ignore env files
+.env
+.env.*
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore PDFs (optional if you don’t want to track them)
+pdfs/
+
+# Ignore local indexes or DB files
+faiss_index/
+lancedb_store/
+
+# Ignore Jupyter notebooks checkpoints
+.ipynb_checkpoints/

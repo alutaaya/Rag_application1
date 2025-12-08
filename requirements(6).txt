@@ -1,0 +1,13 @@
+llama-parse 
+llama-index-core
+llama-index-embeddings-openai
+llama-index-vector-stores-lancedb
+lancedb
+openai
+numpy 
+pandas
+tqdm 
+llama-index-embeddings-huggingface 
+transformers
+sentence-transformers
+torch
