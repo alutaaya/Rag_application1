@@ -14,6 +14,10 @@ from langchain_groq import ChatGroq
 # --- 0. Load environment variables (for local dev) ---
 load_dotenv()
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+LLAMA_CLOUD_API_KEY = os.environ.get("LLAMA_CLOUD_API_KEY")
+
+
 # --- 1. PDF Download from Google Drive ---
 PDF_FILE_ID = "1rY_UE-sIw4f5Z5VUt0pyllPs7tSENsSr"  # Google Drive file ID
 PDF_PATH = "Consolidated-HIV-and-AIDS-Guidelines-2022.pdf"
