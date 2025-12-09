@@ -27,3 +27,4 @@ torch
 langchain
 langchain-community
 langchain-text-splitters
+langchain-groq
