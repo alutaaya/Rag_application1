@@ -104,3 +104,27 @@ for filename in os.listdir(PDF_FOLDER):
 
 st.success("All PDFs parsed successfully!")
 nodes = node_parser.get_nodes_from_documents(all_documents)
+
+# Load embeddings
+embeddings = load_embeddings()
+
+# Create FAISS vector store from nodes
+vectorstore = FAISS.from_documents(documents=nodes, embedding=embeddings)
+
+# Optionally, save to disk for persistence
+vectorstore.save_local("faiss_index")
+
+
+query = st.text_input("Ask a question about the documents:")
+if query:
+    results = vectorstore.similarity_search(query, k=12)  # retrieve top 5 similar docs
+    for r in results:
+        st.write(r.page_content)
+
+
+# Use OpenAI or Llama Cloud to answer queries
+index = VectorStoreIndex(nodes, embedding=OpenAIEmbedding(api_key=OPENAI_API_KEY))
+response = index.query(query)
+st.write(response)
+
+
