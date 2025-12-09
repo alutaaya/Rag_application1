@@ -20,6 +20,9 @@ from langchain_groq import ChatGroq
 # --- 0. Load environment variables ---
 load_dotenv()
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+LLAMA_CLOUD_API_KEY = os.environ.get("LLAMA_CLOUD_API_KEY")
+
 # --- 1. Setup folder and file info ---
 PDF_FOLDER = "pdfs"
 os.makedirs(PDF_FOLDER, exist_ok=True)
