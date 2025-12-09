@@ -15,6 +15,7 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
+from langchain.schema import Document
 
 
 # --- 0. Load environment variables ---
@@ -105,11 +106,17 @@ for filename in os.listdir(PDF_FOLDER):
 st.success("All PDFs parsed successfully!")
 nodes = node_parser.get_nodes_from_documents(all_documents)
 
+# Convert LlamaIndex nodes to LangChain Document objects
+lc_documents = [Document(page_content=node.get_text(), metadata=node.metadata) for node in nodes]
+
+
+
 # Load embeddings
 embeddings = load_embeddings()
 
 # Create FAISS vector store from nodes
-vectorstore = FAISS.from_documents(documents=nodes, embedding=embeddings)
+# Now pass these to FAISS
+vectorstore = FAISS.from_documents(documents=lc_documents, embedding=embeddings)
 
 # Optionally, save to disk for persistence
 vectorstore.save_local("faiss_index")
