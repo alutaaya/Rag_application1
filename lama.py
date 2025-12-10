@@ -131,7 +131,8 @@ if query:
 
 # Use OpenAI or Llama Cloud to answer queries
 index = VectorStoreIndex(nodes, embedding=OpenAIEmbedding(api_key=OPENAI_API_KEY))
-response = index.query(query)
+query_engine = index.as_query_engine()
+response = query_engine.query(query)
 st.write(response)
 
 
