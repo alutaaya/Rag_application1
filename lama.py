@@ -16,6 +16,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
 from langchain_core.documents import Document
+from llama_index.llms.openai import OpenAI
 
 
 # --- 0. Load environment variables ---
@@ -130,9 +131,17 @@ if query:
 
 
 # Use OpenAI or Llama Cloud to answer queries
-index = VectorStoreIndex(nodes, embedding=OpenAIEmbedding(api_key=OPENAI_API_KEY))
-query_engine = index.as_query_engine()
-response = query_engine.query(query)
-st.write(response)
+llm = OpenAI(api_key=OPENAI_API_KEY)
+
+index = VectorStoreIndex(
+    nodes,
+    embedding=OpenAIEmbedding(api_key=OPENAI_API_KEY)
+)
+
+query_engine = index.as_query_engine(llm=llm)
+
+if query:
+    response = query_engine.query(query)
+    st.write(response)
 
 
