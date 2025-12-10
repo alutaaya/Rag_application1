@@ -24,3 +24,4 @@ tqdm
 pypdf
 python-dotenv
 requests
+llama-index-llms-openai
