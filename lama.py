@@ -14,10 +14,6 @@ from llama_index.core import VectorStoreIndex
 from llama_index.llms.openai import OpenAI
 from llama_index.core.prompts import PromptTemplate
 
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.schema import Document
-
 import nest_asyncio
 nest_asyncio.apply()
 
@@ -25,19 +21,13 @@ nest_asyncio.apply()
 # App & Environment Setup
 # =========================
 st.set_page_config(page_title="Uganda Chronic Care Assistant", layout="wide")
-
-
 load_dotenv()
+
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-LLAMA_CLOUD_API_KEY = os.environ.get("LLAMA_CLOUD_API_KEY")
-
+LLAMA_CLOUD_API_KEY = os.environ.get("LLAMA_CLOUD_API_KEY")  # <- included
 PDF_FOLDER = "pdfs"
-FAISS_INDEX_PATH = "faiss_index"
+INDEX_PATH = "rag_index"
 os.makedirs(PDF_FOLDER, exist_ok=True)
-
-
-
-
 
 # =========================
 # PDF Source Registry
@@ -56,8 +46,8 @@ PDF_FILES = {
     "DSD.pdf": "1WRerkPmfRAzgPS234yP56aJ8zYXPwcjT"
 }
 
-def download_file_from_google_drive(file_id, destination):
-    """Download a file from Google Drive given file ID."""
+def download_pdf(file_id, destination):
+    """Download a PDF from Google Drive given file ID."""
     URL = "https://docs.google.com/uc?export=download"
     session = requests.Session()
     response = session.get(URL, params={'id': file_id}, stream=True)
@@ -71,95 +61,73 @@ def download_file_from_google_drive(file_id, destination):
         for chunk in response.iter_content(32768):
             f.write(chunk)
 
+# =========================
 # Download PDFs
+# =========================
+st.info("Checking PDF files...")
 for filename, file_id in PDF_FILES.items():
     path = os.path.join(PDF_FOLDER, filename)
     if not os.path.exists(path):
-        st.info(f"Downloading {filename}…")
-        download_file_from_google_drive(file_id, path)
+        st.info(f"Downloading {filename}...")
+        download_pdf(file_id, path)
         st.success(f"{filename} downloaded successfully!")
     else:
         st.info(f"{filename} already exists.")
 
 # =========================
-# Load embeddings
-# =========================
-@st.cache_resource
-def load_embeddings():
-    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
-
-embeddings = load_embeddings()
-
-# =========================
 # Parse PDFs
 # =========================
+parser = LlamaParse(result_type="markdown", api_key=LLAMA_CLOUD_API_KEY)  # Use Llama API key
 node_parser = SimpleNodeParser()
-parser = LlamaParse(result_type="markdown")
-all_documents = []
+all_docs = []
 
 for filename in os.listdir(PDF_FOLDER):
     if filename.lower().endswith(".pdf"):
-        pdf_path = os.path.join(PDF_FOLDER, filename)
+        path = os.path.join(PDF_FOLDER, filename)
         st.info(f"Parsing {filename}...")
         try:
-            docs = parser.load_data(pdf_path)
+            docs = parser.load_data(path)
             for d in docs:
                 d.metadata["source_file"] = filename
-            all_documents.extend(docs)
+            all_docs.extend(docs)
             st.success(f"{filename} parsed successfully!")
             time.sleep(1)
         except Exception as e:
             st.error(f"Failed to parse {filename}: {e}")
 
-nodes = node_parser.get_nodes_from_documents(all_documents)
-lc_documents = [Document(page_content=node.get_text(), metadata=node.metadata) for node in nodes]
+nodes = node_parser.get_nodes_from_documents(all_docs)
 
 # =========================
-# FAISS Vector Store
+# Build or load index
 # =========================
-if os.path.exists(FAISS_INDEX_PATH):
-    vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embeddings)
+if os.path.exists(INDEX_PATH):
+    index = VectorStoreIndex.load_from_disk(INDEX_PATH)
 else:
-    vectorstore = FAISS.from_documents(lc_documents, embedding=embeddings)
-    vectorstore.save_local(FAISS_INDEX_PATH)
+    index = VectorStoreIndex(nodes, embedding=OpenAIEmbedding(api_key=OPENAI_API_KEY))
+    index.save_to_disk(INDEX_PATH)
 
 # =========================
-# Setup LLM & RAG
+# Setup LLM & Prompt
 # =========================
 llm = OpenAI(api_key=OPENAI_API_KEY)
 
-CLINICAL_QA_PROMPT = PromptTemplate(
+CLINICAL_PROMPT = PromptTemplate(
     """You are a clinical guideline assistant.
-
-Answer the question using ONLY the retrieved document content.
-
-Rules:
-- Respond in at most 2 short sentences
-- Give a direct clinical answer
-- Do NOT add explanations, background, or extra recommendations
-- If timing/frequency is asked, state only the timing and frequency
-
+Answer in at most 2 short sentences, using ONLY the documents.
 Question: {query_str}
-
 Answer:"""
-)
-
-index = VectorStoreIndex(
-    nodes,
-    embedding=OpenAIEmbedding(api_key=OPENAI_API_KEY)
 )
 
 query_engine = index.as_query_engine(
     llm=llm,
-    text_qa_template=CLINICAL_QA_PROMPT
+    text_qa_template=CLINICAL_PROMPT
 )
 
 # =========================
 # Streamlit UI
 # =========================
 st.title("Uganda Chronic Care Assistant (RAG)")
-
-query = st.text_input("Ask a question about the documents:")
+query = st.text_input("Ask a question about the clinical guidelines:")
 
 if query:
     with st.spinner("Fetching answer..."):
