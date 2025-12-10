@@ -1,6 +1,12 @@
 # =========================
 # Imports
 # =========================
+import os
+import time
+import requests
+import streamlit as st
+from dotenv import load_dotenv
+
 from llama_parse import LlamaParse
 from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.embeddings.openai import OpenAIEmbedding
@@ -8,23 +14,18 @@ from llama_index.core import VectorStoreIndex
 from llama_index.llms.openai import OpenAI
 from llama_index.core.prompts import PromptTemplate
 
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.schema import Document
+
 import nest_asyncio
 nest_asyncio.apply()
-
-import os
-import requests
-import streamlit as st
-from dotenv import load_dotenv
-
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_core.documents import Document
-
 
 # =========================
 # App & Environment Setup
 # =========================
 st.set_page_config(page_title="Uganda Chronic Care Assistant", layout="wide")
+
 
 load_dotenv()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
@@ -55,8 +56,8 @@ PDF_FILES = {
     "DSD.pdf": "1WRerkPmfRAzgPS234yP56aJ8zYXPwcjT"
 }
 
-# --- Function to download PDFs from Google Drive ---
 def download_file_from_google_drive(file_id, destination):
+    """Download a file from Google Drive given file ID."""
     URL = "https://docs.google.com/uc?export=download"
     session = requests.Session()
     response = session.get(URL, params={'id': file_id}, stream=True)
@@ -70,7 +71,7 @@ def download_file_from_google_drive(file_id, destination):
         for chunk in response.iter_content(32768):
             f.write(chunk)
 
-# --- Download missing PDFs ---
+# Download PDFs
 for filename, file_id in PDF_FILES.items():
     path = os.path.join(PDF_FOLDER, filename)
     if not os.path.exists(path):
@@ -80,22 +81,22 @@ for filename, file_id in PDF_FILES.items():
     else:
         st.info(f"{filename} already exists.")
 
-# --- Streamlit page config ---
-st.set_page_config(page_title="Uganda Chronic Care Assistant", layout="wide")
-
-# --- Cache embeddings ---
+# =========================
+# Load embeddings
+# =========================
 @st.cache_resource
 def load_embeddings():
     return HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 
 embeddings = load_embeddings()
 
-# --- Initialize parser and LlamaParse ---
+# =========================
+# Parse PDFs
+# =========================
 node_parser = SimpleNodeParser()
 parser = LlamaParse(result_type="markdown")
 all_documents = []
 
-# --- Parse PDFs sequentially with error handling ---
 for filename in os.listdir(PDF_FOLDER):
     if filename.lower().endswith(".pdf"):
         pdf_path = os.path.join(PDF_FOLDER, filename)
@@ -106,26 +107,27 @@ for filename in os.listdir(PDF_FOLDER):
                 d.metadata["source_file"] = filename
             all_documents.extend(docs)
             st.success(f"{filename} parsed successfully!")
-            time.sleep(1)  # small delay to reduce server overload
+            time.sleep(1)
         except Exception as e:
             st.error(f"Failed to parse {filename}: {e}")
 
-# --- Convert nodes to LangChain Documents ---
 nodes = node_parser.get_nodes_from_documents(all_documents)
 lc_documents = [Document(page_content=node.get_text(), metadata=node.metadata) for node in nodes]
 
-# --- Create or load FAISS vector store ---
-FAISS_INDEX_PATH = "faiss_index"
+# =========================
+# FAISS Vector Store
+# =========================
 if os.path.exists(FAISS_INDEX_PATH):
     vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embeddings)
 else:
     vectorstore = FAISS.from_documents(lc_documents, embedding=embeddings)
     vectorstore.save_local(FAISS_INDEX_PATH)
 
-# --- Setup OpenAI LLM ---
+# =========================
+# Setup LLM & RAG
+# =========================
 llm = OpenAI(api_key=OPENAI_API_KEY)
 
-# --- Clinical answer prompt (1–2 sentences) ---
 CLINICAL_QA_PROMPT = PromptTemplate(
     """You are a clinical guideline assistant.
 
@@ -142,7 +144,6 @@ Question: {query_str}
 Answer:"""
 )
 
-# --- Create query engine ---
 index = VectorStoreIndex(
     nodes,
     embedding=OpenAIEmbedding(api_key=OPENAI_API_KEY)
@@ -153,7 +154,9 @@ query_engine = index.as_query_engine(
     text_qa_template=CLINICAL_QA_PROMPT
 )
 
-# --- Streamlit UI ---
+# =========================
+# Streamlit UI
+# =========================
 st.title("Uganda Chronic Care Assistant (RAG)")
 
 query = st.text_input("Ask a question about the documents:")
