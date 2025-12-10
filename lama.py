@@ -17,6 +17,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
 from langchain.schema import Document
 from langchain.docstore.document import Document
+from langchain.docstore.document import Document
 
 
 # --- 0. Load environment variables ---
